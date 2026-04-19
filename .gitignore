@@ -6,3 +6,8 @@ checkpoints/
 gpt2_weights/
 *.pt
 *.ckpt*
+
+# aozora: 加工済みコーパスと学習ログは非公開（raw はコミットして再配布）
+aozora/data/cleaned/
+aozora/data/combined.txt
+aozora/finetune.log

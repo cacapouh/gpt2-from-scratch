@@ -68,3 +68,11 @@ python main.py generate --weights checkpoints/model.pt --prompt "Hello"
 
 シングル RTX 5070（12 GB）を想定。既定値は `max_length=256`、`batch_size=8`。
 GPT-2 small (~124M) は余裕で載るので、VRAM に余裕があればバッチを増やしてください。
+
+## 関連サブプロジェクト
+
+- [aozora/](aozora/README.md) — `rinna/japanese-gpt2-medium` (336M) を
+  青空文庫の明治文学（福沢諭吉・森鷗外・夏目漱石・樋口一葉・幸田露伴）で
+  ファインチューンし、現代的なプロンプトに対して**明治論説文調**の出力を得る実験。
+  HuggingFace Transformers 上で PyTorch 生ループ学習を行う最小構成。
+

@@ -1,0 +1,7 @@
+# torch は既存の CUDA 12.8 ビルドをそのまま使う想定（別途インストール済み）
+transformers>=4.40
+sentencepiece
+protobuf
+requests
+tqdm
+beautifulsoup4
