@@ -65,6 +65,68 @@ def cmd_train(args: argparse.Namespace) -> None:
     )
 
 
+def cmd_finetune(args: argparse.Namespace) -> None:
+    from load_gpt2 import build_openai_gpt
+
+    device = get_device()
+    print(device_info())
+
+    text = load_text_file(args.data)
+    split_idx = int(len(text) * 0.9)
+    train_text, val_text = text[:split_idx], text[split_idx:]
+
+    print(f"loading pretrained base model: {args.base_model}")
+    model = build_openai_gpt(args.base_model, models_dir=args.models_dir)
+    # build_openai_gpt() sets drop_rate=0.0 for inference; re-enable dropout for fine-tuning.
+    for m in model.modules():
+        if isinstance(m, torch.nn.Dropout):
+            m.p = 0.1
+    model.cfg["drop_rate"] = 0.1
+    model.to(device)
+    model.train()
+    print(f"model params: {model.num_parameters()/1e6:.1f}M")
+
+    train_loader = create_dataloader(
+        train_text,
+        batch_size=args.batch_size,
+        max_length=args.max_length,
+        stride=args.max_length,
+        shuffle=True,
+        drop_last=True,
+    )
+    val_loader = create_dataloader(
+        val_text,
+        batch_size=args.batch_size,
+        max_length=args.max_length,
+        stride=args.max_length,
+        shuffle=False,
+        drop_last=False,
+    )
+    print(f"train batches: {len(train_loader)} | val batches: {len(val_loader)}")
+
+    optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=0.1)
+
+    train_model(
+        model,
+        train_loader,
+        val_loader,
+        optimizer,
+        device=device,
+        num_epochs=args.epochs,
+        eval_freq=args.eval_freq,
+        eval_iter=5,
+        sample_prompt=args.prompt,
+        sample_every=args.sample_every,
+        checkpoint_path=args.checkpoint,
+    )
+
+    print("\nFine-tuning complete. Generate with:")
+    print(
+        f'  python main.py generate --weights {args.checkpoint} '
+        f'--prompt "{args.prompt}" --temperature 0.8 --top-k 50'
+    )
+
+
 def cmd_generate(args: argparse.Namespace) -> None:
     device = get_device()
     print(device_info())
@@ -116,6 +178,21 @@ def build_parser() -> argparse.ArgumentParser:
     pt.add_argument("--prompt", default="Every effort moves you")
     pt.add_argument("--checkpoint", default="checkpoints/model.pt")
     pt.set_defaults(func=cmd_train)
+
+    pf = sub.add_parser("finetune", help="Fine-tune a pretrained GPT-2 on a text file")
+    pf.add_argument("--data", required=True, help="Path to a plain text file")
+    pf.add_argument("--base-model", default="gpt2",
+                    help="Pretrained model size (gpt2/gpt2-medium/gpt2-large/gpt2-xl)")
+    pf.add_argument("--epochs", type=int, default=3)
+    pf.add_argument("--batch-size", type=int, default=4)
+    pf.add_argument("--max-length", type=int, default=256)
+    pf.add_argument("--lr", type=float, default=1e-5)
+    pf.add_argument("--eval-freq", type=int, default=20)
+    pf.add_argument("--sample-every", type=int, default=50)
+    pf.add_argument("--prompt", default="Marriage is")
+    pf.add_argument("--checkpoint", default="checkpoints/wilde.pt")
+    pf.add_argument("--models-dir", default="gpt2_weights")
+    pf.set_defaults(func=cmd_finetune)
 
     pg = sub.add_parser("generate", help="Generate text with pretrained or saved weights")
     pg.add_argument(
