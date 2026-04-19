@@ -1,0 +1,12 @@
+# Install torch separately with the matching CUDA wheel, e.g. for RTX 5070:
+#   pip install --index-url https://download.pytorch.org/whl/cu128 torch
+# or for CPU-only:
+#   pip install torch
+# torch>=2.1
+
+tiktoken>=0.5
+numpy
+requests
+tqdm
+safetensors
+packaging
