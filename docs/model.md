@@ -1,11 +1,11 @@
-# Model Internals
+# モデル内部
 
-Source: [../model.py](../model.py)
+ソース: [../model.py](../model.py)
 
-The model is a Pre-Norm decoder-only Transformer. Nothing exotic — just
-attention, MLP, residuals, and two layer norms per block.
+Pre-Norm のデコーダのみ Transformer です。特殊な要素はありません ――
+Attention、MLP、残差、ブロックごとに 2 つの LayerNorm、それだけです。
 
-## Class hierarchy
+## クラス階層
 
 ```mermaid
 classDiagram
@@ -50,7 +50,7 @@ classDiagram
     FeedForward *-- GELU
 ```
 
-## Forward pass, annotated
+## forward パス（注釈付き）
 
 ```mermaid
 flowchart TD
@@ -59,12 +59,12 @@ flowchart TD
     TE --> ADD1((+))
     PE --> ADD1
     ADD1 --> DE[drop_emb]
-    DE --> B[n_layers x TransformerBlock]
+    DE --> B[n_layers 個の TransformerBlock]
     B --> FN[final_norm]
     FN --> OH[out_head b,t,vocab]
 ```
 
-## TransformerBlock (Pre-Norm)
+## TransformerBlock（Pre-Norm）
 
 ```mermaid
 flowchart LR
@@ -81,25 +81,25 @@ flowchart LR
     R2 --> OUT[out]
 ```
 
-Pre-Norm (normalize **before** the sublayer) is what GPT-2 uses. It gives
-every residual stream a direct identity path, which is why very deep
-Transformers can be trained stably.
+Pre-Norm（サブレイヤの **前** に正規化する）は GPT-2 で採用されています。
+各残差ストリームに恒等経路が直結するため、非常に深い Transformer でも
+安定して学習できるのが利点です。
 
 ## MultiHeadAttention
 
-Shapes are tracked per step:
+各ステップの shape を追います。
 
-| Step | Op | Shape |
+| ステップ | 演算 | Shape |
 |---|---|---|
-| input | `x` | `(b, t, d)` |
-| project | `W_q(x)`, `W_k(x)`, `W_v(x)` | `(b, t, d)` |
-| split heads | `.view(b, t, H, d/H).transpose(1, 2)` | `(b, H, t, d_h)` |
-| scores | `q @ k.transpose(-2,-1) / sqrt(d_h)` | `(b, H, t, t)` |
+| 入力 | `x` | `(b, t, d)` |
+| 射影 | `W_q(x)`、`W_k(x)`、`W_v(x)` | `(b, t, d)` |
+| ヘッド分割 | `.view(b, t, H, d/H).transpose(1, 2)` | `(b, H, t, d_h)` |
+| スコア | `q @ k.transpose(-2,-1) / sqrt(d_h)` | `(b, H, t, t)` |
 | causal mask | `.masked_fill(mask[:t,:t], -inf)` | `(b, H, t, t)` |
 | softmax + dropout | | `(b, H, t, t)` |
-| weighted sum | `weights @ v` | `(b, H, t, d_h)` |
-| merge heads | `.transpose(1,2).contiguous().view(b, t, d)` | `(b, t, d)` |
-| output proj | `W_out` | `(b, t, d)` |
+| 重み付き和 | `weights @ v` | `(b, H, t, d_h)` |
+| ヘッド結合 | `.transpose(1,2).contiguous().view(b, t, d)` | `(b, t, d)` |
+| 出力射影 | `W_out` | `(b, t, d)` |
 
 ```mermaid
 flowchart LR
@@ -127,17 +127,17 @@ mask = torch.triu(torch.ones(T, T, dtype=torch.bool), diagonal=1)
 self.register_buffer("mask", mask, persistent=False)
 ```
 
-- Upper triangle above the diagonal is `True` → those positions are masked.
-- Registered as a buffer so it moves with `.to(device)` and is not a parameter.
-- `persistent=False` keeps it out of `state_dict` (it's cheap to reconstruct).
-- Sliced to `mask[:t, :t]` so shorter inputs work at inference.
+- 対角より上（上三角）が `True` → そこがマスク対象。
+- buffer なので `.to(device)` についてくるが、パラメータではない。
+- `persistent=False` で `state_dict` には含めない（再生成が安い）。
+- 推論時に短い入力が来ても動くよう `mask[:t, :t]` でスライス。
 
 ### `qkv_bias`
 
-- **Training from scratch**: `False` (matches the paper).
-- **Loading OpenAI weights**: `True` — the official checkpoint includes QKV bias. [../load_gpt2.py](../load_gpt2.py) sets this automatically.
+- **スクラッチ学習時**: `False`（論文に合わせる）。
+- **OpenAI 重みロード時**: `True` ―― 公式 checkpoint が QKV バイアスを含むため。[../load_gpt2.py](../load_gpt2.py) が自動で切り替えます。
 
-## LayerNorm (custom)
+## LayerNorm（自作）
 
 ```python
 mean = x.mean(dim=-1, keepdim=True)
@@ -145,28 +145,30 @@ var  = x.var(dim=-1, keepdim=True, unbiased=False)
 return scale * (x - mean) / sqrt(var + eps) + shift
 ```
 
-- `unbiased=False` matches `nn.LayerNorm`. Max numeric delta measured vs `nn.LayerNorm`: ~2e-7.
-- `eps = 1e-5` is the default GPT-2 value.
+- `unbiased=False` で `nn.LayerNorm` と一致。実測の最大差は約 2e-7。
+- `eps = 1e-5` は GPT-2 のデフォルト。
 
-## GELU (tanh approximation)
+## GELU（tanh 近似）
 
 $$\text{GELU}(x) = 0.5 x \left(1 + \tanh\left(\sqrt{\tfrac{2}{\pi}} \left(x + 0.044715 x^3\right)\right)\right)$$
 
-Bit-exact against `nn.GELU(approximate='tanh')` in our tests.
+`nn.GELU(approximate='tanh')` と bit-exact で一致することを確認済み。
 
 ## FeedForward
 
-Two linear layers with a 4× hidden expansion and GELU in between:
+4 倍幅に広げる 2 層の線形変換 + 中間 GELU:
 
 `d → 4d → GELU → d → Dropout`
 
-## Parameter counts
+## パラメータ数
 
-For GPT-2 small (`vocab=50257`, `d=768`, `L=12`, `H=12`, `ctx=1024`):
+GPT-2 small（`vocab=50257`、`d=768`、`L=12`、`H=12`、`ctx=1024`）の場合:
 
-- Token embeddings: 50257 × 768 ≈ 38.6M
-- Positional embeddings: 1024 × 768 ≈ 0.8M
-- Per block: 4 × (d × d) attention + 2 × (d × 4d) MLP + norms ≈ 7.1M → × 12 = 85M
-- `out_head`: 768 × 50257 ≈ 38.6M (tied to `tok_emb` when loading OpenAI weights)
+- トークン埋め込み: 50257 × 768 ≈ 38.6M
+- 位置埋め込み: 1024 × 768 ≈ 0.8M
+- 1 ブロックあたり: Attention 4 × (d × d) + MLP 2 × (d × 4d) + norms ≈ 7.1M → × 12 = 約 85M
+- `out_head`: 768 × 50257 ≈ 38.6M（OpenAI 重みロード時は `tok_emb` と結合）
 
-Our untied implementation reports **162.4M** parameters at `context_length=256` (smaller positional table) and **163.0M** when loading the full pretrained model. With weight tying (which [../load_gpt2.py](../load_gpt2.py) enforces via copy) the *distinct* count is ~124M, matching OpenAI's figure.
+本実装は結合なしで **162.4M**（`context_length=256` 時、位置テーブルが小さい）、
+フル事前学習ロード時は **163.0M** と表示します。重み結合（[../load_gpt2.py](../load_gpt2.py) が copy で実現）を入れると
+実質的なパラメータ数は約 124M となり、OpenAI の公称値と一致します。

@@ -1,21 +1,21 @@
-# Documentation
+# ドキュメント
 
-A DeepWiki-style guide to this repository.
+本リポジトリの DeepWiki 風ガイドです。
 
-## Pages
-- [Architecture Overview](architecture.md) — system diagram, module map, data flow
-- [Model Internals](model.md) — `GPTModel`, attention, layer norm, GELU, feed-forward
-- [Data Pipeline](data.md) — BPE tokenization, sliding-window dataset
-- [Training Loop](training.md) — loss, evaluation, sampling hooks
-- [Text Generation](generation.md) — autoregressive decoding, temperature, top-k
-- [Weight Loading](weight-loading.md) — HuggingFace safetensors → our `GPTModel`
-- [Fine-tuning](finetuning.md) — adapting pretrained GPT-2 to new corpora
-- [CLI Reference](cli.md) — all subcommands and flags
-- [Glossary](glossary.md) — BPE, Pre-Norm, causal mask, weight tying, etc.
+## ページ一覧
+- [アーキテクチャ概要](architecture.md) — システム図、モジュール相関、データフロー
+- [モデル内部](model.md) — `GPTModel`、Attention、LayerNorm、GELU、FeedForward
+- [データパイプライン](data.md) — BPE トークナイザ、スライディングウィンドウ Dataset
+- [学習ループ](training.md) — 損失、評価、サンプリングフック
+- [テキスト生成](generation.md) — 自己回帰デコード、temperature、top-k
+- [重みロード](weight-loading.md) — HuggingFace safetensors → 本実装の `GPTModel`
+- [ファインチューニング](finetuning.md) — 事前学習済み GPT-2 を新コーパスに適応させる
+- [CLI リファレンス](cli.md) — 全サブコマンドとフラグ
+- [用語集](glossary.md) — BPE、Pre-Norm、causal mask、weight tying など
 
-## Reading order
-1. [Architecture Overview](architecture.md) — what and why
-2. [Model Internals](model.md) — how each layer works
-3. [Data Pipeline](data.md) + [Training Loop](training.md) — how the model learns
-4. [Text Generation](generation.md) — how the model speaks
-5. [Weight Loading](weight-loading.md) + [Fine-tuning](finetuning.md) — practical recipes
+## 読む順序
+1. [アーキテクチャ概要](architecture.md) — 何を・なぜ
+2. [モデル内部](model.md) — 各層がどう動くか
+3. [データパイプライン](data.md) ＋ [学習ループ](training.md) — どう学習するか
+4. [テキスト生成](generation.md) — どう文を生成するか
+5. [重みロード](weight-loading.md) ＋ [ファインチューニング](finetuning.md) — 実践レシピ

@@ -1,81 +1,81 @@
-# CLI Reference
+# CLI リファレンス
 
-Entry: `python main.py <subcommand> [flags]`  — see [../main.py](../main.py).
+エントリ: `python main.py <サブコマンド> [フラグ]` ―― 詳細は [../main.py](../main.py)。
 
-Three subcommands: [train](#train), [finetune](#finetune), [generate](#generate).
+サブコマンドは 3 つ: [train](#train)、[finetune](#finetune)、[generate](#generate)。
 
 ## train
 
-Train a GPT-2 from random init.
+GPT-2 をランダム初期化から学習する。
 
 ```powershell
 python main.py train --data the-verdict.txt --epochs 10
 ```
 
-| Flag | Default | Meaning |
+| フラグ | 既定値 | 意味 |
 |---|---|---|
-| `--data` | **required** | Path to a UTF-8 text file |
-| `--epochs` | `10` | Training epochs |
-| `--batch-size` | `8` | Mini-batch size |
-| `--max-length` | `256` | Sequence length *and* positional-embedding size |
-| `--lr` | `4e-4` | AdamW learning rate |
-| `--eval-freq` | `20` | Eval every N steps |
-| `--sample-every` | `100` | Sample text every N steps |
-| `--prompt` | `"Every effort moves you"` | Prompt used for sampling |
-| `--checkpoint` | `checkpoints/model.pt` | Where to save |
+| `--data` | **必須** | UTF-8 テキストファイルへのパス |
+| `--epochs` | `10` | 学習エポック数 |
+| `--batch-size` | `8` | ミニバッチサイズ |
+| `--max-length` | `256` | シーケンス長 *および* 位置埋め込みサイズ |
+| `--lr` | `4e-4` | AdamW の学習率 |
+| `--eval-freq` | `20` | N ステップごとに評価 |
+| `--sample-every` | `100` | N ステップごとにサンプル生成 |
+| `--prompt` | `"Every effort moves you"` | サンプリング用プロンプト |
+| `--checkpoint` | `checkpoints/model.pt` | 保存先 |
 
 ## finetune
 
-Warm-start from OpenAI pretrained weights.
+OpenAI 事前学習済み重みからウォームスタート。
 
 ```powershell
 python main.py finetune --data wilde.txt --epochs 3 --prompt "Marriage is"
 ```
 
-| Flag | Default | Meaning |
+| フラグ | 既定値 | 意味 |
 |---|---|---|
-| `--data` | **required** | Path to a UTF-8 text file |
+| `--data` | **必須** | UTF-8 テキストファイルへのパス |
 | `--base-model` | `gpt2` | `gpt2` / `gpt2-medium` / `gpt2-large` / `gpt2-xl` |
 | `--epochs` | `3` | |
 | `--batch-size` | `4` | |
 | `--max-length` | `256` | |
-| `--lr` | `1e-5` | 40× lower than `train` on purpose |
+| `--lr` | `1e-5` | `train` より 40 倍低いのは意図的 |
 | `--eval-freq` | `20` | |
 | `--sample-every` | `50` | |
 | `--prompt` | `"Marriage is"` | |
 | `--checkpoint` | `checkpoints/wilde.pt` | |
-| `--models-dir` | `gpt2_weights` | Cache for downloaded safetensors |
+| `--models-dir` | `gpt2_weights` | ダウンロード safetensors のキャッシュ |
 
-After training, the CLI prints the matching `generate` command.
+学習後、対応する `generate` コマンドを CLI が出力する。
 
 ## generate
 
-Sample text from either pretrained weights or a checkpoint.
+事前学習済み重み、または自作の checkpoint からテキスト生成。
 
 ```powershell
-# OpenAI pretrained
+# OpenAI 事前学習済み
 python main.py generate --weights gpt2 --prompt "The meaning of life is"
 
-# local checkpoint
+# ローカル checkpoint
 python main.py generate --weights checkpoints/wilde.pt --prompt "Marriage is"
 ```
 
-| Flag | Default | Meaning |
+| フラグ | 既定値 | 意味 |
 |---|---|---|
-| `--weights` | **required** | `gpt2`/`gpt2-medium`/… **or** path to a `.pt` checkpoint |
-| `--prompt` | **required** | Text to condition on |
-| `--max-new-tokens` | `50` | How many tokens to generate |
-| `--temperature` | `1.0` | Sampling temperature. `0` → greedy |
-| `--top-k` | `50` | Top-k filter. `0` → disabled |
-| `--models-dir` | `gpt2_weights` | Cache dir for HF weights |
+| `--weights` | **必須** | `gpt2`／`gpt2-medium`／… **または** `.pt` checkpoint へのパス |
+| `--prompt` | **必須** | 条件となるテキスト |
+| `--max-new-tokens` | `50` | 生成するトークン数 |
+| `--temperature` | `1.0` | サンプリング温度。`0` で greedy |
+| `--top-k` | `50` | top-k フィルタ。`0` で無効 |
+| `--models-dir` | `gpt2_weights` | HF 重みのキャッシュディレクトリ |
 
-## Exit behavior
+## 終了挙動
 
-All three subcommands return exit code `0` on success and propagate Python
-exceptions (non-zero) on failure. No custom error handling on top.
+3 つのサブコマンドは成功時 exit code `0` を返し、失敗時は Python 例外
+（非ゼロ）を伝播します。上にかぶせたエラー処理はありません。
 
-## Environment
+## 実行環境
 
-- Python 3.12 venv (see [../README.md](../README.md) for install steps).
-- PyTorch 2.11 + CUDA 12.8 for RTX 50-series. CPU fallback works automatically via [../utils.py](../utils.py) `get_device()`.
-- First `generate --weights gpt2` call downloads ~548 MB to `gpt2_weights/gpt2/model.safetensors` and caches it.
+- Python 3.12 の venv（インストール手順は [../README.md](../README.md) 参照）。
+- RTX 50 系向けに PyTorch 2.11 + CUDA 12.8。CPU フォールバックは [../utils.py](../utils.py) の `get_device()` が自動で行います。
+- 初回の `generate --weights gpt2` で約 548 MB を `gpt2_weights/gpt2/model.safetensors` にダウンロードしてキャッシュします。

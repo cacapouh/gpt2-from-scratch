@@ -1,15 +1,15 @@
-# Text Generation
+# テキスト生成
 
-Source: [../generate.py](../generate.py)
+ソース: [../generate.py](../generate.py)
 
-## The core loop
+## コアループ
 
 ```python
 for _ in range(max_new_tokens):
-    idx_cond = idx[:, -context_size:]        # clip to context window
-    logits   = model(idx_cond)[:, -1, :]     # last-position logits
+    idx_cond = idx[:, -context_size:]        # コンテキスト窓にクリップ
+    logits   = model(idx_cond)[:, -1, :]     # 最終位置の logits
 
-    # optional top-k filter
+    # 任意で top-k フィルタ
     if top_k:
         v, _ = torch.topk(logits, top_k)
         logits[logits < v[:, -1:]] = -inf
@@ -23,63 +23,61 @@ for _ in range(max_new_tokens):
     idx = torch.cat([idx, next_id], dim=1)
 ```
 
-## Flow diagram
+## フロー図
 
 ```mermaid
 flowchart TD
-    P[prompt text] --> E[tiktoken.encode]
+    P[プロンプトテキスト] --> E[tiktoken.encode]
     E --> IDX[idx b=1, t0]
     IDX --> LOOP{step < max_new_tokens}
     LOOP -- yes --> CLIP[idx -context_size:]
     CLIP --> FW[model forward]
     FW --> LAST[logits :, -1, :]
     LAST --> TK{top_k > 0}
-    TK -- yes --> FILT[mask outside top_k to -inf]
+    TK -- yes --> FILT[top_k 外を -inf にマスク]
     TK -- no --> TEMP
     FILT --> TEMP{temperature > 0}
     TEMP -- yes --> SM[softmax, multinomial]
     TEMP -- no --> GR[argmax greedy]
-    SM --> APP[append to idx]
+    SM --> APP[idx に append]
     GR --> APP
     APP --> LOOP
     LOOP -- no --> DEC[tiktoken.decode]
     DEC --> OUT[text]
 ```
 
-## Decoding knobs
+## デコードのノブ
 
-| Knob | Effect |
+| ノブ | 効果 |
 |---|---|
-| `temperature=0` | Greedy — deterministic `argmax`. Good for sanity checks, often loops. |
-| `temperature=1.0` | Sample from the raw softmax distribution. |
-| `temperature<1` | "Sharper" distribution, less surprise, more repetition. |
-| `temperature>1` | Flatter, more chaotic. |
-| `top_k=None or 0` | No truncation. |
-| `top_k=50` | Keep only the top 50 logits; a common default. |
+| `temperature=0` | Greedy ―― 決定論的な `argmax`。sanity check 向き。ループに陥りやすい。 |
+| `temperature=1.0` | 生の softmax 分布からサンプリング。 |
+| `temperature<1` | 分布が「シャープ」になる。驚きが減り、繰り返しが増える。 |
+| `temperature>1` | 平坦化し、よりカオス。 |
+| `top_k=None or 0` | 切り詰めなし。 |
+| `top_k=50` | 上位 50 logits だけ残す。一般的な既定値。 |
 
-### Greedy is deterministic — and that's a feature
+### Greedy は決定論的 ―― そしてそれは仕様
 
-The test suite exploits this: `generate(..., temperature=0)` called twice with
-the same prompt must return the same string. This is a great regression guard
-against hidden non-determinism (e.g. forgetting `model.eval()` so dropout
-randomly fires at inference).
+テストでは `generate(..., temperature=0)` を同じプロンプトで 2 回呼んで、
+同じ文字列が返ることを確認します。隠れた非決定性（例: `model.eval()` を忘れて
+dropout が推論時に発火してしまう）に対する優れた回帰テストになります。
 
-## Context-length handling
+## コンテキスト長の扱い
 
-`idx_cond = idx[:, -context_size:]` guarantees we never feed more than
-`context_length` tokens to the model, even after hundreds of generated tokens.
-The oldest tokens scroll off the left — a simple "sliding" context window.
+`idx_cond = idx[:, -context_size:]` により、生成で何百トークン足しても、
+モデルに流す入力が `context_length` を超えることはありません。古いトークンは
+左から押し出されていく ―― シンプルな「スライディング」コンテキスト窓です。
 
-## Why only the last position?
+## なぜ最終位置だけ？
 
-GPT-style language models predict the *next* token at every position
-simultaneously (that's how training uses `(b*t, V)` logits). At inference we
-only need the prediction for the current end of the sequence, so we index
-`logits[:, -1, :]`.
+GPT 系の言語モデルは、全位置で同時に *次の* トークンを予測します
+（学習では `(b*t, V)` の logits をそのまま損失にかける理由）。
+推論時は最後の位置の予測だけあれば十分なので `logits[:, -1, :]` で取り出します。
 
-## Special tokens
+## 特殊トークン
 
-The tokenizer is called with `allowed_special={"<|endoftext|>"}` in
-[../data.py](../data.py) so prompts can contain it. The generate loop also accepts an
-optional `eos_id` to stop early — it's unused from the CLI but available
-programmatically.
+[../data.py](../data.py) ではトークナイザを `allowed_special={"<|endoftext|>"}` で
+呼んでいるので、プロンプトに含めることができます。`generate` ループには
+オプションで `eos_id`（到達したら生成停止）も用意 ―― CLI からは使っていませんが
+プログラマブルに利用できます。

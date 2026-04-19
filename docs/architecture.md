@@ -1,22 +1,22 @@
-# Architecture Overview
+# アーキテクチャ概要
 
-This repository is a minimal PyTorch re-implementation of **GPT-2 small (124M)** with
-enough infrastructure to train from scratch, fine-tune, and run inference with
-OpenAI's pretrained weights — all from a single CLI.
+本リポジトリは **GPT-2 small (124M)** を PyTorch で最小限に再実装したものです。
+スクラッチ学習、ファインチューニング、OpenAI の事前学習済み重みでの推論まで、
+ひとつの CLI から実行できます。
 
-## 10-second summary
+## 10 秒サマリ
 
-| Aspect | Value |
+| 項目 | 値 |
 |---|---|
-| Model family | Decoder-only Transformer (GPT-2 small) |
-| Parameters | ~124M (untied) / ~162.4M when positional embeddings are shrunk to `max_length=256` |
-| Tokenizer | GPT-2 BPE via `tiktoken` (vocab 50,257) |
-| Training objective | Next-token prediction (causal LM, cross-entropy) |
-| Precision | fp32 |
-| Hardware target | Single RTX 5070 (12 GB VRAM), CUDA 12.8 |
-| Weight tying | `out_head.weight` is tied to `tok_emb.weight` when loading OpenAI weights |
+| モデル系統 | デコーダのみの Transformer（GPT-2 small） |
+| パラメータ数 | 約 124M（重み結合時） / `max_length=256` に縮めると約 162.4M（位置埋め込みを小さくした実装上の値） |
+| トークナイザ | `tiktoken` の GPT-2 BPE（語彙 50,257） |
+| 学習目的 | 次トークン予測（causal LM、クロスエントロピー） |
+| 精度 | fp32 |
+| 想定ハード | RTX 5070（12 GB VRAM）、CUDA 12.8 |
+| 重み結合 | OpenAI 重みロード時に `out_head.weight` と `tok_emb.weight` を共有 |
 
-## Module map
+## モジュール相関
 
 ```mermaid
 graph LR
@@ -58,54 +58,54 @@ graph LR
     DLW --> GUT
 ```
 
-## High-level data flow
+## データフロー（俯瞰）
 
 ```mermaid
 flowchart TD
-    T[Text file] -->|tiktoken encode| IDS[token ids]
-    IDS -->|sliding window stride=max_length| PAIRS[input_ids, target_ids]
-    PAIRS --> DL[DataLoader batches]
+    T[テキストファイル] -->|tiktoken encode| IDS[token ids]
+    IDS -->|スライディングウィンドウ stride=max_length| PAIRS[input_ids, target_ids]
+    PAIRS --> DL[DataLoader バッチ]
     DL --> FW[GPTModel forward]
     FW --> LOGITS[logits b,t,vocab]
-    LOGITS -->|cross_entropy vs target_ids| LOSS
+    LOGITS -->|target_ids とのクロスエントロピー| LOSS
     LOSS -->|backward, AdamW| FW
-    LOGITS -->|last-position only| SAMPLE[temperature / top-k]
-    SAMPLE -->|append| IDS2[new token]
-    IDS2 -->|decode| OUT[generated text]
+    LOGITS -->|最終位置のみ| SAMPLE[temperature / top-k]
+    SAMPLE -->|append| IDS2[新しいトークン]
+    IDS2 -->|decode| OUT[生成テキスト]
 ```
 
-## Three execution modes
+## 3 つの実行モード
 
-All entered through [../main.py](../main.py):
+すべて [../main.py](../main.py) から入ります。
 
 ```mermaid
 flowchart LR
-    U([user]) --> M[main.py]
-    M -->|subcommand| T{mode}
-    T -->|train| TRAIN_MODE[fresh GPTModel<br/>random init<br/>lr=4e-4]
-    T -->|finetune| FT_MODE[load pretrained<br/>re-enable dropout<br/>lr=1e-5]
-    T -->|generate| GEN_MODE[load ckpt or HF<br/>autoregressive decode]
+    U([ユーザー]) --> M[main.py]
+    M -->|サブコマンド| T{mode}
+    T -->|train| TRAIN_MODE[新規 GPTModel<br/>ランダム初期化<br/>lr=4e-4]
+    T -->|finetune| FT_MODE[事前学習をロード<br/>dropout 再有効化<br/>lr=1e-5]
+    T -->|generate| GEN_MODE[ckpt または HF をロード<br/>自己回帰デコード]
     TRAIN_MODE --> CKPT1[checkpoints/model.pt]
     FT_MODE --> CKPT2[checkpoints/wilde.pt]
     GEN_MODE --> STDOUT[stdout]
 ```
 
-- **train**: cold start. Use to observe loss curves and to verify the architecture is wired correctly.
-- **finetune**: warm start from OpenAI weights. Cheap, fast, and produces high-quality stylistic transfer.
-- **generate**: inference from either HuggingFace weights (`gpt2`, `gpt2-medium`, …) or any saved `.pt` checkpoint.
+- **train**: コールドスタート。loss カーブを観察したり、アーキテクチャの配線が正しいか確かめたりに使います。
+- **finetune**: OpenAI の事前学習済み重みからウォームスタート。安価・高速で、文体転写に高い効果。
+- **generate**: 推論。HuggingFace 上の GPT-2 系（`gpt2`、`gpt2-medium` など）でも、任意の `.pt` チェックポイントでも動きます。
 
-## Why GPT-2 small?
+## なぜ GPT-2 small か
 
-- Fits in 12 GB VRAM with `batch_size=8`, `max_length=256`, fp32, AdamW.
-- The published TF checkpoint and its HF mirror are simple (no GQA, no RoPE, no MoE).
-- Pre-Norm decoder-only is the direct ancestor of every modern open-weights LLM; everything you learn here transfers.
+- 12 GB VRAM に `batch_size=8`、`max_length=256`、fp32、AdamW でちょうど載ります。
+- 公式 TF チェックポイントとその HF ミラーはシンプル（GQA も RoPE も MoE も無し）。
+- Pre-Norm のデコーダのみ構成は、現代のオープン重み LLM すべての直接の祖先であり、学んだことがそのまま応用できます。
 
-## Design decisions worth knowing
+## 押さえておきたい設計判断
 
-- **Custom `LayerNorm` / `GELU`**: reimplemented to match `nn.LayerNorm` / `nn.GELU(approximate='tanh')` so the math is visible. Verified numerically equivalent.
-- **Pre-Norm residuals**: `x = x + f(norm(x))` inside each [TransformerBlock](../model.py). This is what GPT-2 uses; it stabilizes training of deep stacks compared to Post-Norm.
-- **Separate `W_q`, `W_k`, `W_v`**: clearer than a fused `c_attn` matrix. The weight loader splits OpenAI's fused `c_attn` into three via `torch.chunk(..., 3, dim=-1)`.
-- **Boolean causal mask as a `register_buffer`**: no gradients, travels with `.to(device)`, but `persistent=False` keeps it out of `state_dict`.
-- **Positional embeddings are learned, shape `(context_length, emb_dim)`**: the CLI shrinks `context_length` to `max_length` during `train` to save memory. The pretrained loader keeps the full 1024.
+- **自作 `LayerNorm` ／ `GELU`**: `nn.LayerNorm` / `nn.GELU(approximate='tanh')` と数値一致するよう実装し直しています。数式を目に見える形にするのが目的。実測で等価性を確認済み。
+- **Pre-Norm 残差**: 各 [TransformerBlock](../model.py) は `x = x + f(norm(x))`。GPT-2 はこれ。深いスタックでも Post-Norm より安定して学習できます。
+- **`W_q`／`W_k`／`W_v` を分離**: フュージョンされた `c_attn` より読みやすい。重みロード時は `torch.chunk(..., 3, dim=-1)` で OpenAI の `c_attn` を 3 分割します。
+- **Bool の causal mask を `register_buffer` で保持**: 勾配不要で、`.to(device)` にも追随。`persistent=False` なので `state_dict` には含まれません。
+- **位置埋め込みは学習可能（`(context_length, emb_dim)`）**: CLI は `train` 時にメモリ節約のため `context_length` を `max_length` に縮めます。事前学習済みロード時はフルの 1024 のまま。
 
-See [Model Internals](model.md) for the per-layer tour.
+レイヤ単位の解説は [モデル内部](model.md) を参照。

@@ -1,68 +1,70 @@
 # GPT-2 from Scratch
 
-A minimal, from-scratch PyTorch implementation of GPT-2 (124M) following
-Sebastian Raschka's *"Build a Large Language Model (from Scratch)"*.
+Sebastian Raschka 著『Build a Large Language Model (from Scratch)』に沿って、
+GPT-2 small (124M) を PyTorch でゼロから実装した最小構成のプロジェクトです。
 
-**Documentation**: see [docs/README.md](docs/README.md) for a DeepWiki-style
-tour (architecture, model internals, data pipeline, training/generation
-loops, weight loading, fine-tuning, CLI reference, glossary).
+**ドキュメント**: [docs/README.md](docs/README.md) に DeepWiki 風のガイド
+（アーキテクチャ、モデル内部、データパイプライン、学習／生成ループ、
+重みロード、ファインチューニング、CLI リファレンス、用語集）があります。
 
-## Layout
-- [config.py](config.py) - model size presets
-- [data.py](data.py) - sliding-window dataset + DataLoader (tiktoken GPT-2 BPE)
-- [model.py](model.py) - `MultiHeadAttention`, `LayerNorm`, `GELU`, `FeedForward`, `TransformerBlock`, `GPTModel`
-- [generate.py](generate.py) - autoregressive sampling (temperature + top-k)
-- [train.py](train.py) - training loop with periodic eval / sample printing
-- [load_gpt2.py](load_gpt2.py) - download HuggingFace GPT-2 safetensors and map into our model
-- [main.py](main.py) - CLI (`train` / `generate`)
-- [utils.py](utils.py) - device helpers
+## 構成
+- [config.py](config.py) — モデルサイズのプリセット
+- [data.py](data.py) — スライディングウィンドウの Dataset と DataLoader（tiktoken GPT-2 BPE）
+- [model.py](model.py) — `MultiHeadAttention`、`LayerNorm`、`GELU`、`FeedForward`、`TransformerBlock`、`GPTModel`
+- [generate.py](generate.py) — 自己回帰サンプリング（temperature + top-k）
+- [train.py](train.py) — 定期 eval ／サンプル生成付きの学習ループ
+- [load_gpt2.py](load_gpt2.py) — HuggingFace の GPT-2 safetensors をダウンロードして本実装に読み込む
+- [main.py](main.py) — CLI（`train` / `finetune` / `generate`）
+- [utils.py](utils.py) — デバイスヘルパ
+- [download_wilde.py](download_wilde.py) — Project Gutenberg から Oscar Wilde 5 作品を取得して連結
 
-## Install
+## インストール
 
-Use Python 3.12 (PyTorch 2.11 has CUDA wheels for cp310-cp313 but not cp314 yet).
+Python 3.12 を使ってください（PyTorch 2.11 の CUDA ホイールは cp310–cp313 にはありますが、
+cp314 にはまだありません）。
 
 ```powershell
 py -3.12 -m venv .venv
 .venv\Scripts\Activate.ps1
 
-# CUDA 12.8 build (for RTX 50-series / Blackwell sm_120):
+# CUDA 12.8 ビルド（RTX 50 シリーズ / Blackwell sm_120 向け）:
 pip install --index-url https://download.pytorch.org/whl/cu128 torch
 
-# Or CPU-only:
+# CPU のみの場合:
 # pip install torch
 
 pip install -r requirements.txt
 ```
 
-Verify the GPU is detected:
+GPU が認識されているかを確認：
 
 ```powershell
 python -c "import torch; print(torch.cuda.is_available(), torch.cuda.get_device_name(0))"
 ```
 
-## Usage
+## 使い方
 
-**Train on a short text (e.g. "The Verdict" by Edith Wharton):**
+**短いテキストで学習（例: Edith Wharton 『The Verdict』）:**
 
 ```powershell
 python main.py train --data the-verdict.txt --epochs 10
 ```
 
-**Generate with OpenAI's pretrained weights (downloads on first run):**
+**OpenAI の事前学習済み重みで生成（初回はダウンロードが走ります）:**
 
 ```powershell
 python main.py generate --weights gpt2 --prompt "The meaning of life is"
 ```
 
-**Generate with your own checkpoint:**
+**自分で学習したチェックポイントで生成:**
 
 ```powershell
 python main.py generate --weights checkpoints/model.pt --prompt "Hello"
 ```
 
-Use `--temperature` and `--top-k` to control sampling.
+`--temperature` と `--top-k` でサンプリング挙動を調整できます。
 
-## Hardware
+## ハードウェア
 
-Tuned for a single RTX 5070 (12 GB). Defaults: `max_length=256`, `batch_size=8`.
-GPT-2 small (~124M params) fits easily; enlarge batch size if VRAM allows.
+シングル RTX 5070（12 GB）を想定。既定値は `max_length=256`、`batch_size=8`。
+GPT-2 small (~124M) は余裕で載るので、VRAM に余裕があればバッチを増やしてください。

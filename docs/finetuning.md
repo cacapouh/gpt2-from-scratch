@@ -1,24 +1,23 @@
-# Fine-tuning
+# ファインチューニング
 
-Source: [../main.py](../main.py) (`cmd_finetune`) and [../download_wilde.py](../download_wilde.py)
+ソース: [../main.py](../main.py) の `cmd_finetune`、および [../download_wilde.py](../download_wilde.py)
 
-## What fine-tuning means here
+## ここで言う「ファインチューニング」の意味
 
-Continue language-model pre-training on a new corpus. Same loss
-(next-token cross-entropy), same architecture, dramatically smaller
-learning rate. The model retains general English competence from
-the OpenAI pretraining run and shifts its distribution toward the new
-text.
+新しいコーパス上で言語モデルの事前学習を **継続する** こと。損失は同じ
+（次トークンのクロスエントロピー）、アーキテクチャも同じ、学習率だけを
+劇的に小さくします。モデルは OpenAI 事前学習で得た一般的な英語能力を保ったまま、
+分布を新しいテキストに寄せていきます。
 
-## Flow
+## フロー
 
 ```mermaid
 flowchart TD
     CLI[python main.py finetune --data wilde.txt] --> LOAD[build_openai_gpt gpt2]
-    LOAD -->|downloads if missing| HF[(HF safetensors)]
+    LOAD -->|未取得なら DL| HF[(HF safetensors)]
     LOAD --> M[GPTModel drop_rate=0, qkv_bias=True]
-    M --> FIX[set Dropout.p=0.1<br/>cfg drop_rate=0.1<br/>model.train]
-    FIX --> SPLIT[text 9:1 split]
+    M --> FIX[Dropout.p=0.1<br/>cfg drop_rate=0.1<br/>model.train]
+    FIX --> SPLIT[テキストを 9:1 に分割]
     SPLIT --> DL1[train DataLoader]
     SPLIT --> DL2[val DataLoader]
     DL1 --> TL[train_model]
@@ -26,19 +25,19 @@ flowchart TD
     M --> TL
     OPT[AdamW lr=1e-5 wd=0.1] --> TL
     TL --> CKPT[checkpoints/wilde.pt<br/>state_dict + cfg]
-    CKPT --> HINT[prints generate command]
+    CKPT --> HINT[generate コマンドを出力]
 ```
 
-## Why a 40× smaller learning rate
+## なぜ 40 倍小さい学習率か
 
-Pretrained weights are already close to a strong minimum. A fresh-init
-learning rate like `4e-4` would blast through it and erase what GPT-2 knows.
-`1e-5` is a widely used default for GPT-2-scale fine-tunes.
+事前学習済み重みはすでに強い最小値の近くにいます。`4e-4` のような新規学習向きの
+ステップ幅ではそこを吹き飛ばして、GPT-2 が知っていることを上書きしてしまいます。
+`1e-5` は GPT-2 スケールのファインチューニングでよく使われるデフォルトです。
 
-## Re-enabling dropout
+## dropout の再有効化
 
-`build_openai_gpt()` sets `drop_rate=0.0` because its primary purpose is
-inference. Before fine-tuning we flip dropout back on:
+`build_openai_gpt()` は推論が主目的なので `drop_rate=0.0` に設定します。
+ファインチューニング前に dropout を有効化し直します:
 
 ```python
 for m in model.modules():
@@ -48,29 +47,28 @@ model.cfg["drop_rate"] = 0.1
 model.train()
 ```
 
-Updating `model.cfg["drop_rate"]` is important: it gets saved in the
-checkpoint, and `cmd_generate` uses the stored cfg to rebuild the model.
-The next `generate` call will still `.eval()` the model, which disables
-dropout at inference — so the saved value only matters for continued training.
+`model.cfg["drop_rate"]` を更新するのは重要 ―― checkpoint に保存されるからです。
+次の `generate` 呼び出しは `cfg` からモデルを再構築し、そこで `.eval()` されるため
+推論時に dropout は発火しません。つまり保存した値は **継続学習時** だけ意味を持ちます。
 
-## Checkpoint compatibility
+## checkpoint の互換性
 
-Because [../train.py](../train.py) saves the exact `cfg` used to build the
-model, `cmd_generate` can rebuild it bitwise:
+[../train.py](../train.py) はモデル構築に使った `cfg` をそのまま保存するため、
+`cmd_generate` は完全に同じアーキテクチャを再構築できます:
 
 ```python
 ckpt = torch.load(path, weights_only=False)
-cfg  = ckpt["config"]           # includes qkv_bias=True
-model = GPTModel(cfg)           # architecture matches
+cfg  = ckpt["config"]           # qkv_bias=True も含む
+model = GPTModel(cfg)           # アーキテクチャ一致
 model.load_state_dict(ckpt["model_state_dict"])
 ```
 
-This is why `python main.py generate --weights checkpoints/wilde.pt` Just Works.
+これが `python main.py generate --weights checkpoints/wilde.pt` がそのまま動く理由です。
 
-## Worked example: Oscar Wilde
+## 実例: Oscar Wilde
 
-`download_wilde.py` fetches five Wilde works from Project Gutenberg, strips
-the boilerplate headers/footers, and joins them with `<|endoftext|>`:
+`download_wilde.py` は Project Gutenberg から Wilde 5 作品を取得し、
+冒頭／末尾のボイラープレートを除いて `<|endoftext|>` で連結します:
 
 ```
 The Importance of Being Earnest
@@ -80,22 +78,22 @@ Lady Windermere's Fan
 A Woman of No Importance
 ```
 
-Resulting `wilde.txt` ≈ 970 KB.
+できあがりの `wilde.txt` は約 970 KB。
 
-On an RTX 5070:
+RTX 5070 で:
 
-- 1 epoch, `batch_size=4`, `max_length=256`, 255 training batches.
-- Wall clock ≈ 34 s.
-- train loss 3.67 → 2.69, val loss 3.48 → 2.69.
+- 1 エポック、`batch_size=4`、`max_length=256`、学習バッチ 255。
+- 実時間 約 34 秒。
+- train loss 3.67 → 2.69、val loss 3.48 → 2.69。
 
-Sample generation after 1 epoch with the prompt `"Marriage is"`:
+1 エポック後にプロンプト `"Marriage is"` で生成したサンプル:
 
 > Marriage is a manly act. And if it is not allowed to be, it is not allowed to be at all. It is no longer acceptable, and it is no longer safe either for those who love me, or for those who do not. It is an obligation as much as a duty; and
 
-Characteristically Wildean paradox and cadence, with the pretraining's grammar intact.
+Wilde らしい逆説と韻律が既に出ていて、事前学習の文法もそのまま保たれています。
 
-## Knobs worth tweaking
+## 触る価値のあるノブ
 
-- `--epochs 3` is the default. For this corpus, train loss continues falling but val loss plateaus around epoch 2 — classic fine-tuning overfitting curve.
-- `--lr 1e-5` is conservative. Some practitioners push to `5e-5`; go higher and you risk "forgetting".
-- `--max-length` up to 1024 is fine because the pretrained model has `context_length=1024`. Longer contexts dramatically increase memory.
+- `--epochs 3` が既定。このコーパスでは train loss は下がり続けますが val loss は 2 エポック目で頭打ち ―― 典型的なファインチューニングの過学習カーブ。
+- `--lr 1e-5` は保守的。`5e-5` まで上げる実践者もいますが、上げすぎると「忘却」のリスク。
+- `--max-length` は 1024 まで可（事前学習モデルが `context_length=1024` だから）。長くすると VRAM を急激に消費します。

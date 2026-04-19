@@ -1,18 +1,18 @@
-# Weight Loading (OpenAI GPT-2)
+# 重みロード（OpenAI GPT-2）
 
-Source: [../load_gpt2.py](../load_gpt2.py)
+ソース: [../load_gpt2.py](../load_gpt2.py)
 
-## Why HuggingFace safetensors instead of the TF checkpoint?
+## なぜ TF checkpoint ではなく HuggingFace safetensors か
 
-The book uses the official TensorFlow checkpoint. We switched to the
-[openai-community/gpt2](https://huggingface.co/openai-community/gpt2) mirror
-distributed as `model.safetensors` because:
+原著は公式の TensorFlow checkpoint を使いますが、本実装では
+[openai-community/gpt2](https://huggingface.co/openai-community/gpt2) ミラーの
+`model.safetensors` に切り替えています。理由：
 
-- TensorFlow has no Python 3.13+ wheels, which locks the project to old Pythons.
-- `safetensors` is a tiny dependency, loads faster, and is memory-mapped.
-- The weights are **identical** — HuggingFace re-exported OpenAI's originals.
+- TensorFlow は Python 3.13 以降の wheel を提供していないため、古い Python に縛られる。
+- `safetensors` は小さな依存で、ロードが速く、mmap 可能。
+- 重みは **同一** ―― HuggingFace は OpenAI の原本を再エクスポートしているだけ。
 
-## Download
+## ダウンロード
 
 ```mermaid
 flowchart LR
@@ -26,78 +26,78 @@ flowchart LR
     MAP --> MODEL[GPTModel]
 ```
 
-Sizes mapped through `SIZE_ALIASES`:
+`SIZE_ALIASES` 経由のサイズ対応:
 
-| Input | Repo | HF file |
+| 入力 | リポジトリ | HF ファイル |
 |---|---|---|
-| `gpt2`, `gpt2-small`, `124M` | `openai-community/gpt2` | 548 MB |
-| `gpt2-medium`, `355M` | `openai-community/gpt2-medium` | ~1.4 GB |
-| `gpt2-large`, `774M` | `openai-community/gpt2-large` | ~3.0 GB |
-| `gpt2-xl`, `1558M` | `openai-community/gpt2-xl` | ~6.2 GB |
+| `gpt2`、`gpt2-small`、`124M` | `openai-community/gpt2` | 548 MB |
+| `gpt2-medium`、`355M` | `openai-community/gpt2-medium` | 約 1.4 GB |
+| `gpt2-large`、`774M` | `openai-community/gpt2-large` | 約 3.0 GB |
+| `gpt2-xl`、`1558M` | `openai-community/gpt2-xl` | 約 6.2 GB |
 
-## Key mapping
+## キーマッピング
 
-HuggingFace GPT-2 keys use the original **Conv1D convention** (weight shape
-`(in, out)`), whereas `nn.Linear` uses `(out, in)`. Every weight therefore
-needs a transpose.
+HuggingFace の GPT-2 キーはオリジナルの **Conv1D 規約**（weight shape `(in, out)`）を
+使います。一方 `nn.Linear` は `(out, in)` なので、weight はすべて転置が必要です。
 
-| HF key | Our parameter | Transform |
+| HF キー | 本実装のパラメータ | 変換 |
 |---|---|---|
 | `wte.weight` | `tok_emb.weight` | — |
 | `wpe.weight` | `pos_emb.weight` | — |
 | `h.{i}.ln_1.weight / bias` | `blocks[i].norm1.scale / shift` | — |
-| `h.{i}.attn.c_attn.weight` | `blocks[i].attn.W_q / W_k / W_v.weight` | chunk on last dim → **transpose** |
-| `h.{i}.attn.c_attn.bias` | `blocks[i].attn.W_{q,k,v}.bias` | chunk on last dim |
-| `h.{i}.attn.c_proj.weight / bias` | `blocks[i].attn.W_out.weight / bias` | **transpose weight** |
+| `h.{i}.attn.c_attn.weight` | `blocks[i].attn.W_q / W_k / W_v.weight` | 最終軸で chunk → **転置** |
+| `h.{i}.attn.c_attn.bias` | `blocks[i].attn.W_{q,k,v}.bias` | 最終軸で chunk |
+| `h.{i}.attn.c_proj.weight / bias` | `blocks[i].attn.W_out.weight / bias` | **weight 転置** |
 | `h.{i}.ln_2.weight / bias` | `blocks[i].norm2.scale / shift` | — |
-| `h.{i}.mlp.c_fc.weight / bias` | `blocks[i].ff.linear1.weight / bias` | **transpose weight** |
-| `h.{i}.mlp.c_proj.weight / bias` | `blocks[i].ff.linear2.weight / bias` | **transpose weight** |
+| `h.{i}.mlp.c_fc.weight / bias` | `blocks[i].ff.linear1.weight / bias` | **weight 転置** |
+| `h.{i}.mlp.c_proj.weight / bias` | `blocks[i].ff.linear2.weight / bias` | **weight 転置** |
 | `ln_f.weight / bias` | `final_norm.scale / shift` | — |
-| `wte.weight` | `out_head.weight` | tied (copied) |
+| `wte.weight` | `out_head.weight` | 結合（copy） |
 
-### The fused `c_attn` tensor
+### フュージョンされた `c_attn`
 
-GPT-2 packs Q, K, V into one `(emb, 3*emb)` matrix for efficiency:
+GPT-2 は効率のため Q/K/V を `(emb, 3*emb)` の 1 行列にパックしています:
 
 ```python
 c_attn_w = sd["h.0.attn.c_attn.weight"]   # (768, 2304)
-q, k, v  = torch.chunk(c_attn_w, 3, dim=-1)   # three (768, 768) each
+q, k, v  = torch.chunk(c_attn_w, 3, dim=-1)   # (768, 768) が 3 つ
 W_q.weight.copy_(q.T)                     # (out=768, in=768)
 ```
 
-Biases are chunked similarly but don't need transposing.
+bias も同様に chunk するが、こちらは転置不要。
 
-### Weight tying
+### 重み結合（weight tying）
 
-GPT-2 ties the output projection to the input embedding:
+GPT-2 は出力射影を入力埋め込みと共有します:
 
 ```python
 _assign(model.out_head.weight, sd["wte.weight"])
 ```
 
-This ensures the "what is token *i*?" lookup and the "how likely is the next token *i*?" projection use the same matrix — halving the embedding/head parameter count in effect.
+「トークン *i* は何か」を引くルックアップと「次のトークンが *i* である確率」を算出する射影に
+同じ行列を使う ―― 実質的に埋め込み／ヘッドのパラメータ数が半減します。
 
-## Config adjustments
+## config の調整
 
-`build_openai_gpt()` deviates from the stock `GPT_CONFIGS` entry in two places:
+`build_openai_gpt()` は `GPT_CONFIGS` の値から 2 箇所を変更します:
 
 ```python
-cfg["qkv_bias"]  = True   # OpenAI weights include QKV bias
-cfg["drop_rate"] = 0.0    # inference — no dropout
+cfg["qkv_bias"]  = True   # OpenAI 重みは QKV バイアスを含む
+cfg["drop_rate"] = 0.0    # 推論 ―― dropout なし
 ```
 
-For fine-tuning, [../main.py](../main.py) flips dropout back on after loading (see [Fine-tuning](finetuning.md)).
+ファインチューニング時は [../main.py](../main.py) がロード後に dropout を再有効化します
+（[ファインチューニング](finetuning.md) 参照）。
 
-## Shape assertion
+## Shape アサーション
 
-`_assign` checks every copy:
+`_assign` が全コピーをチェックします:
 
 ```python
 if param.shape != value.shape:
     raise ValueError(f"shape mismatch: param {...} vs value {...}")
 ```
 
-This is the single best defense against silently loading transposed or
-wrong-layer weights — which would produce "plausible but broken" generation
-that's very hard to debug. If the model generates coherent English after
-loading, the mapping is correct end-to-end.
+これは「転置ミス」や「層の誤ロード」といった、**一見もっともらしいが壊れた** 生成を
+生む最凶のバグに対する最良の防御策です。ロード後にきちんとした英語が生成できていれば、
+マッピングは端から端まで正しいことが経験的に確認できる、とも言えます。
