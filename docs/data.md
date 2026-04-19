@@ -16,7 +16,7 @@ tiktoken.get_encoding("gpt2")
 - サブワードの BPE、**語彙サイズ 50,257**。
 - OpenAI の GPT-2 トークナイザと bit 一致なので、事前学習済み重みをそのまま使える。
 - `allowed_special={"<|endoftext|>"}` を渡しているので、特殊トークン 50256 を
-  入力テキストに含められる（`wilde.txt` で作品境界に使用）。
+  入力テキストに含められる（複数作品を連結したコーパスで作品境界に使える）。
 
 ## スライディングウィンドウ Dataset
 
@@ -62,8 +62,7 @@ split = int(len(text) * 0.9)
 train_text, val_text = text[:split], text[split:]
 ```
 
-文字単位の分割（トークン単位ではない）。`the-verdict.txt`（約 20K 文字）や
-`wilde.txt`（約 970K 文字）程度の小さいコーパスには十分。
+文字単位の分割（トークン単位ではない）。`the-verdict.txt`（約 20K 文字）や数 100K 文字のコーパスには十分。
 
 ## バッチの shape
 

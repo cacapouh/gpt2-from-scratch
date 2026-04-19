@@ -29,7 +29,7 @@ python main.py train --data the-verdict.txt --epochs 10
 OpenAI 事前学習済み重みからウォームスタート。
 
 ```powershell
-python main.py finetune --data wilde.txt --epochs 3 --prompt "Marriage is"
+python main.py finetune --data your_corpus.txt --epochs 3 --prompt "Once upon a time"
 ```
 
 | フラグ | 既定値 | 意味 |
@@ -42,9 +42,12 @@ python main.py finetune --data wilde.txt --epochs 3 --prompt "Marriage is"
 | `--lr` | `1e-5` | `train` より 40 倍低いのは意図的 |
 | `--eval-freq` | `20` | |
 | `--sample-every` | `50` | |
-| `--prompt` | `"Marriage is"` | |
-| `--checkpoint` | `checkpoints/wilde.pt` | |
+| `--prompt` | `"Every effort moves you"` | |
+| `--checkpoint` | `checkpoints/finetuned.pt` | |
 | `--models-dir` | `gpt2_weights` | ダウンロード safetensors のキャッシュ |
+
+日本語をファインチューンしたい場合は、英語 GPT-2 BPE では意味のある結果にならないため
+[../aozora/](../aozora/README.md) サブプロジェクトを参照。
 
 学習後、対応する `generate` コマンドを CLI が出力する。
 
@@ -57,7 +60,7 @@ python main.py finetune --data wilde.txt --epochs 3 --prompt "Marriage is"
 python main.py generate --weights gpt2 --prompt "The meaning of life is"
 
 # ローカル checkpoint
-python main.py generate --weights checkpoints/wilde.pt --prompt "Marriage is"
+python main.py generate --weights checkpoints/finetuned.pt --prompt "Once upon a time"
 ```
 
 | フラグ | 既定値 | 意味 |

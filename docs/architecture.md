@@ -39,10 +39,6 @@ graph LR
         LOAD[load_gpt2.py<br/>build_openai_gpt]
         HF[(HuggingFace<br/>safetensors)]
     end
-    subgraph Scripts
-        DLW[download_wilde.py]
-        GUT[(Project<br/>Gutenberg)]
-    end
 
     MAIN --> CFG
     MAIN --> DATA
@@ -55,7 +51,6 @@ graph LR
     GEN --> MODEL
     LOAD --> MODEL
     LOAD --> HF
-    DLW --> GUT
 ```
 
 ## データフロー（俯瞰）
@@ -86,7 +81,7 @@ flowchart LR
     T -->|finetune| FT_MODE[事前学習をロード<br/>dropout 再有効化<br/>lr=1e-5]
     T -->|generate| GEN_MODE[ckpt または HF をロード<br/>自己回帰デコード]
     TRAIN_MODE --> CKPT1[checkpoints/model.pt]
-    FT_MODE --> CKPT2[checkpoints/wilde.pt]
+    FT_MODE --> CKPT2[checkpoints/finetuned.pt]
     GEN_MODE --> STDOUT[stdout]
 ```
 

@@ -48,8 +48,8 @@ agent: "agent"
 
 4. **動作確認**（ファインチューン版とベースを比較）
    ```powershell
-   python main.py generate --weights checkpoints/meiji_gpt2 --prompt "電子計算機とは、"
-   python main.py generate --weights rinna/japanese-gpt2-medium --prompt "電子計算機とは、"
+   python main.py generate --model checkpoints/meiji_gpt2 --prompt "電子計算機とは、"
+   python main.py generate --model rinna/japanese-gpt2-medium --prompt "電子計算機とは、"
    ```
 
 ## 確認してほしいこと

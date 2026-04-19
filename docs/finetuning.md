@@ -1,6 +1,6 @@
 # ファインチューニング
 
-ソース: [../main.py](../main.py) の `cmd_finetune`、および [../download_wilde.py](../download_wilde.py)
+ソース: [../main.py](../main.py) の `cmd_finetune`
 
 ## ここで言う「ファインチューニング」の意味
 
@@ -9,11 +9,17 @@
 劇的に小さくします。モデルは OpenAI 事前学習で得た一般的な英語能力を保ったまま、
 分布を新しいテキストに寄せていきます。
 
+> **日本語テキストで試したい場合**: 本実装の `finetune` は OpenAI の
+> 英語 GPT-2（tiktoken の GPT-2 BPE）をベースにしているため、日本語では
+> 意味のある結果になりません。日本語は [../aozora/](../aozora/README.md) を
+> 参照してください（`rinna/japanese-gpt2-medium` を HuggingFace Transformers で
+> 扱う専用パイプラインあり）。
+
 ## フロー
 
 ```mermaid
 flowchart TD
-    CLI[python main.py finetune --data wilde.txt] --> LOAD[build_openai_gpt gpt2]
+    CLI[python main.py finetune --data corpus.txt] --> LOAD[build_openai_gpt gpt2]
     LOAD -->|未取得なら DL| HF[(HF safetensors)]
     LOAD --> M[GPTModel drop_rate=0, qkv_bias=True]
     M --> FIX[Dropout.p=0.1<br/>cfg drop_rate=0.1<br/>model.train]
@@ -24,7 +30,7 @@ flowchart TD
     DL2 --> TL
     M --> TL
     OPT[AdamW lr=1e-5 wd=0.1] --> TL
-    TL --> CKPT[checkpoints/wilde.pt<br/>state_dict + cfg]
+    TL --> CKPT[checkpoints/finetuned.pt<br/>state_dict + cfg]
     CKPT --> HINT[generate コマンドを出力]
 ```
 
@@ -63,37 +69,24 @@ model = GPTModel(cfg)           # アーキテクチャ一致
 model.load_state_dict(ckpt["model_state_dict"])
 ```
 
-これが `python main.py generate --weights checkpoints/wilde.pt` がそのまま動く理由です。
+これが `python main.py generate --weights checkpoints/finetuned.pt` がそのまま動く理由です。
 
-## 実例: Oscar Wilde
+## コーパスの用意
 
-`download_wilde.py` は Project Gutenberg から Wilde 5 作品を取得し、
-冒頭／末尾のボイラープレートを除いて `<|endoftext|>` で連結します:
+`finetune` は UTF-8 のプレーンテキストを `--data` に渡すだけ。複数作品を
+連結する場合は作品境界に `<|endoftext|>` を入れると事前学習時の挙動に揃います:
 
-```
-The Importance of Being Earnest
-The Picture of Dorian Gray
-An Ideal Husband
-Lady Windermere's Fan
-A Woman of No Importance
+```python
+combined = "\n\n<|endoftext|>\n\n".join(works)
 ```
 
-できあがりの `wilde.txt` は約 970 KB。
-
-RTX 5070 で:
-
-- 1 エポック、`batch_size=4`、`max_length=256`、学習バッチ 255。
-- 実時間 約 34 秒。
-- train loss 3.67 → 2.69、val loss 3.48 → 2.69。
-
-1 エポック後にプロンプト `"Marriage is"` で生成したサンプル:
-
-> Marriage is a manly act. And if it is not allowed to be, it is not allowed to be at all. It is no longer acceptable, and it is no longer safe either for those who love me, or for those who do not. It is an obligation as much as a duty; and
-
-Wilde らしい逆説と韻律が既に出ていて、事前学習の文法もそのまま保たれています。
+適度な規模の目安は 500 KB〜数 MB。短すぎると過学習、長すぎると 1 epoch が
+重くなります。RTX 5070 で `batch_size=4, max_length=256, lr=1e-5, epochs=3` が
+ちょうど数分〜十数分で回る手応えの良いレンジ。
 
 ## 触る価値のあるノブ
 
-- `--epochs 3` が既定。このコーパスでは train loss は下がり続けますが val loss は 2 エポック目で頭打ち ―― 典型的なファインチューニングの過学習カーブ。
-- `--lr 1e-5` は保守的。`5e-5` まで上げる実践者もいますが、上げすぎると「忘却」のリスク。
-- `--max-length` は 1024 まで可（事前学習モデルが `context_length=1024` だから）。長くすると VRAM を急激に消費します。
+- `--epochs 3` が既定。文体転写が目的なら 2〜3 epoch で train loss は下がり続けても val loss が頭打ちする典型的なカーブが出ます。そこで止める
+- `--lr 1e-5` は保守的。`5e-5` まで上げる実践者もいますが、上げすぎると「忘却」のリスク
+- `--max-length` は 1024 まで可（事前学習モデルが `context_length=1024` だから）。長くすると VRAM を急激に消費します
+- `--base-model gpt2-medium`（355M）にすると表現力が上がる一方、lr は据え置きで OK

@@ -50,11 +50,28 @@ python main.py finetune --epochs 3 --batch-size 1 --grad-accum-steps 2
 
 ```powershell
 # ファインチューン後
-python main.py generate --weights checkpoints/meiji_gpt2 --prompt "電子計算機とは、"
+python main.py generate --model checkpoints/meiji_gpt2 --prompt "電子計算機とは、"
 
 # 比較用（素の rinna）
-python main.py generate --weights rinna/japanese-gpt2-medium --prompt "電子計算機とは、"
+python main.py generate --model rinna/japanese-gpt2-medium --prompt "電子計算機とは、"
 ```
+
+絶対パスで指定するケース（他ディレクトリから実行する場合）:
+
+```powershell
+# ファインチューン後
+C:\Users\yoshi\work\llm\.venv\Scripts\python.exe C:\Users\yoshi\work\llm\aozora\main.py generate `
+    --model C:\Users\yoshi\work\llm\aozora\checkpoints\meiji_gpt2 `
+    --prompt "電子計算機とは、"
+
+# ベース（比較用）
+C:\Users\yoshi\work\llm\.venv\Scripts\python.exe C:\Users\yoshi\work\llm\aozora\main.py generate `
+    --model rinna/japanese-gpt2-medium `
+    --prompt "電子計算機とは、"
+```
+
+> `--model` は `--weights` のエイリアス。「ローカルのチェックポイントパス」と
+> 「HuggingFace Hub のモデル ID」の両方を受け付けます。
 
 `--temperature 0.7 --top-k 40` くらいに絞ると文法崩壊が減る。
 

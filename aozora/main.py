@@ -96,7 +96,7 @@ def build_parser() -> argparse.ArgumentParser:
     sf.set_defaults(func=cmd_finetune)
 
     sg = sub.add_parser("generate", help="テキスト生成")
-    sg.add_argument("--weights", required=True,
+    sg.add_argument("--weights", "--model", dest="weights", required=True,
                     help="'rinna/japanese-gpt2-medium' または checkpoints/xxx")
     sg.add_argument("--prompt", required=True)
     sg.add_argument("--max-new-tokens", type=int, default=100)

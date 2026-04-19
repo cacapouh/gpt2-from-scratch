@@ -189,8 +189,8 @@ def build_parser() -> argparse.ArgumentParser:
     pf.add_argument("--lr", type=float, default=1e-5)
     pf.add_argument("--eval-freq", type=int, default=20)
     pf.add_argument("--sample-every", type=int, default=50)
-    pf.add_argument("--prompt", default="Marriage is")
-    pf.add_argument("--checkpoint", default="checkpoints/wilde.pt")
+    pf.add_argument("--prompt", default="Every effort moves you")
+    pf.add_argument("--checkpoint", default="checkpoints/finetuned.pt")
     pf.add_argument("--models-dir", default="gpt2_weights")
     pf.set_defaults(func=cmd_finetune)
 
