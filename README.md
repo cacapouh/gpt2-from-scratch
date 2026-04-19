@@ -3,6 +3,10 @@
 A minimal, from-scratch PyTorch implementation of GPT-2 (124M) following
 Sebastian Raschka's *"Build a Large Language Model (from Scratch)"*.
 
+**Documentation**: see [docs/README.md](docs/README.md) for a DeepWiki-style
+tour (architecture, model internals, data pipeline, training/generation
+loops, weight loading, fine-tuning, CLI reference, glossary).
+
 ## Layout
 - [config.py](config.py) - model size presets
 - [data.py](data.py) - sliding-window dataset + DataLoader (tiktoken GPT-2 BPE)
