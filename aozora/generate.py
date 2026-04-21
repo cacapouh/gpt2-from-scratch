@@ -11,7 +11,9 @@ def generate(
     max_new_tokens: int = 100,
     temperature: float = 0.9,
     top_k: int = 50,
+    top_p: float = 1.0,
     repetition_penalty: float = 1.1,
+    no_repeat_ngram_size: int = 0,
 ) -> str:
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -29,7 +31,9 @@ def generate(
             do_sample=True,
             temperature=temperature,
             top_k=top_k,
+            top_p=top_p,
             pad_token_id=tokenizer.pad_token_id or tokenizer.eos_token_id,
             repetition_penalty=repetition_penalty,
+            no_repeat_ngram_size=no_repeat_ngram_size,
         )
     return tokenizer.decode(out[0], skip_special_tokens=True)

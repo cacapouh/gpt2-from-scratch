@@ -11,3 +11,5 @@ gpt2_weights/
 aozora/data/cleaned/
 aozora/data/combined.txt
 aozora/finetune.log
+aozora/finetune*.log
+aozora/data_rebuild.log
